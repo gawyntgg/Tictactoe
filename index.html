@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gawynt Tic-Tac-Toe</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background-color: #1e1e24; color: white; }
+    h1 { margin-top: 20px; color: #fb8500; }
+    #setup, #game-area { margin: 20px auto; max-width: 400px; }
+    #board { display: grid; grid-template-columns: repeat(3, 100px); gap: 5px; justify-content: center; margin-top: 20px; }
+    .cell { width: 100px; height: 100px; background-color: #333; display: flex; align-items: center; justify-content: center; font-size: 2em; cursor: pointer; transition: 0.2s; }
+    .cell:hover { background-color: #444; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; background: #fb8500; border: none; border-radius: 5px; color: white; font-weight: bold; }
+    button:hover { background: #ff9e00; }
+    #status { font-size: 1.2em; margin-top: 20px; font-weight: bold; color: #8ecae6; }
+    #game-area { display: none; } /* Hidden until player picks a side */
+  </style>
+</head>
+<body>
+
+  <h1>Gawynt Tic-Tac-Toe</h1>
+
+  <div id="setup">
+    <h3>Choose your side:</h3>
+    <button id="btn-join-x">Play as X</button>
+    <button id="btn-join-o">Play as O</button>
+  </div>
+
+  <div id="game-area">
+    <p>You are playing as: <span id="player-label" style="color: #fb8500;"></span></p>
+    <div id="status">Connecting to game...</div>
+    <div id="board">
+      <div class="cell" data-index="0"></div>
+      <div class="cell" data-index="1"></div>
+      <div class="cell" data-index="2"></div>
+      <div class="cell" data-index="3"></div>
+      <div class="cell" data-index="4"></div>
+      <div class="cell" data-index="5"></div>
+      <div class="cell" data-index="6"></div>
+      <div class="cell" data-index="7"></div>
+      <div class="cell" data-index="8"></div>
+    </div>
+    <br>
+    <button id="btn-reset">Reset Global Game Board</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBuWWnqDX5mUra5pF3uuBxEVSKjcESifTk",
+      authDomain: "gawynt-hub.firebaseapp.com",
+      databaseURL: "https://gawynt-hub-default-rtdb.firebaseio.com",
+      projectId: "gawynt-hub",
+      storageBucket: "gawynt-hub.firebasestorage.app",
+      messagingSenderId: "330651852035",
+      appId: "1:330651852035:web:db931f867da21b6a519d36",
+      measurementId: "G-XLXGTVSPXT"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const gameRef = ref(db, 'tictactoe/room1');
+
+    let localPlayer = null;
+    let currentGameState = {
+      board: ["", "", "", "", "", "", "", "", ""],
+      turn: "X",
+      winner: null
+    };
+
+    const setupDiv = document.getElementById("setup");
+    const gameArea = document.getElementById("game-area");
+    const statusDiv = document.getElementById("status");
+    const cells = document.querySelectorAll(".cell");
+    const playerLabel = document.getElementById("player-label");
+
+    document.getElementById("btn-join-x").addEventListener("click", () => joinGame("X"));
+    document.getElementById("btn-join-o").addEventListener("click", () => joinGame("O"));
+
+    function joinGame(side) {
+      localPlayer = side;
+      playerLabel.innerText = side;
+      setupDiv.style.display = "none";
+      gameArea.style.display = "block";
+    }
+
+    onValue(gameRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        currentGameState = data;
+      } else {
+        currentGameState = { board: ["", "", "", "", "", "", "", "", ""], turn: "X", winner: null };
+      }
+      updateUI();
+    });
+
+    function updateUI() {
+      cells.forEach((cell, index) => {
+        cell.innerText = currentGameState.board[index];
+      });
+
+      if (currentGameState.winner) {
+        if (currentGameState.winner === "Draw") {
+          statusDiv.innerText = "It's a Draw!";
+        } else {
+          statusDiv.innerText = `Player ${currentGameState.winner} Wins!`;
+        }
+      } else {
+        if (currentGameState.turn === localPlayer) {
+          statusDiv.innerText = "Your Turn!";
+        } else {
+          statusDiv.innerText = `Waiting for Player ${currentGameState.turn}...`;
+        }
+      }
+    }
+
+    cells.forEach(cell => {
+      cell.addEventListener("click", (e) => {
+        const index = e.target.getAttribute("data-index");
+
+        if (!localPlayer) return;
+        if (currentGameState.turn !== localPlayer) {
+            alert("It's not your turn!");
+            return;
+        }
+        if (currentGameState.board[index] !== "") return;
+        if (currentGameState.winner !== null) return;
+
+        const newBoard = [...currentGameState.board];
+        newBoard[index] = localPlayer;
+        const nextTurn = localPlayer === "X" ? "O" : "X";
+        const newWinner = checkWinner(newBoard);
+
+        set(gameRef, {
+          board: newBoard,
+          turn: nextTurn,
+          winner: newWinner
+        });
+      });
+    });
+
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      set(gameRef, {
+        board: ["", "", "", "", "", "", "", "", ""],
+        turn: "X",
+        winner: null
+      });
+    });
+
+    function checkWinner(b) {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+      
+      for (let pattern of winPatterns) {
+        const [x, y, z] = pattern;
+        if (b[x] && b[x] === b[y] && b[x] === b[z]) {
+          return b[x];
+        }
+      }
+      if (!b.includes("")) return "Draw";
+      return null;
+    }
+  </script>
+</body>
+</html>
